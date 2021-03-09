@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ServiceProcess;
 using System.Threading;
 using System.Threading.Channels;
@@ -26,19 +27,29 @@ namespace Otamot.Agent
             {
                 _logger.LogCritical($"Received new event for service {@event.Service.Controller.ServiceName}");
                 var policies = @event.Service.Policies;
-                foreach (var policy in policies)
-                {
-                    _logger.LogInformation($"{policy} <<<<<");
-                    switch (policy)
-                    {
-                        case RestartPolicy restartPolicy:
-                            ExecuteRestartPolicy(stoppingToken, @event, restartPolicy);
-                            break;
-                        default:
-                            _logger.LogWarning($"Unknown policy {policy}");
-                            break;
-                    }
-                }
+                HandlePolicies(stoppingToken, policies, @event);
+            }
+        }
+
+        private void HandlePolicies(CancellationToken stoppingToken, IEnumerable<IPolicy> policies, IServiceEvent @event)
+        {
+            foreach (var policy in policies)
+            {
+                HandlePolicy(stoppingToken, policy, @event);
+            }
+        }
+
+        private void HandlePolicy(CancellationToken stoppingToken, IPolicy policy, IServiceEvent @event)
+        {
+            _logger.LogInformation($"{policy} <<<<<");
+            switch (policy)
+            {
+                case RestartPolicy restartPolicy:
+                    ExecuteRestartPolicy(stoppingToken, @event, restartPolicy);
+                    break;
+                default:
+                    _logger.LogWarning($"Unknown policy {policy}");
+                    break;
             }
         }
 
@@ -82,7 +93,6 @@ namespace Otamot.Agent
                 @event.Service.Controller.Start();
                 _logger.LogInformation($"Successfully executed policy {restartPolicy}");
                 restartPolicy.RestartsWithoutSuccess = 0;
-                return;
             }
             catch (Exception e)
             {
